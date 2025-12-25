@@ -1,4 +1,4 @@
-# icloud-photo-pipelin
+# icloud-photo-pipeline
 
 Automation of downloading, processing, and archiving iCloud photos and videos using data engineering practices.
 
