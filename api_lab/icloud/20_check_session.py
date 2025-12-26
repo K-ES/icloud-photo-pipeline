@@ -1,16 +1,17 @@
 from pyicloud import PyiCloudService
-from pathlib import Path
+from config import APPLE_ID, COOKIE_DIR
 
-APPLE_ID = "ekrivonogov@inbox.ru"
+def check_session():
+    api = PyiCloudService(
+        APPLE_ID,
+        cookie_directory=str(COOKIE_DIR)
+    )
 
-# cookies вне проекта
-COOKIE_DIR = Path.home() / ".icloud_cookies"
-COOKIE_DIR.mkdir(exist_ok=True)
+    print("requires_2fa:", api.requires_2fa)
+    print("is_trusted_session:", api.is_trusted_session)
 
-api = PyiCloudService(
-    APPLE_ID,
-    cookie_directory=str(COOKIE_DIR)
-)
+    return api
 
-print("requires_2fa:", api.requires_2fa)
-print("is_trusted_session:", api.is_trusted_session)
+
+if __name__ == "__main__":
+    check_session()

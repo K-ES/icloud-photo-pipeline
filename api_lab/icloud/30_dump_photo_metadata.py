@@ -1,79 +1,87 @@
-from pyicloud import PyiCloudService
-from pyicloud.exceptions import (
-    PyiCloudFailedLoginException,
-    PyiCloudAPIResponseException,
-)
-from pathlib import Path
+import time
+import logging
 import pandas as pd
-import sys
+from tqdm import tqdm
+import pyicloud
 
-APPLE_ID = "ekrivonogov@inbox.ru"
-COOKIE_DIR = Path.home() / ".icloud_cookies"
-OUT_FILE = Path(__file__).parent / "icloud_photos_metadata.xlsx"
+from pyicloud.exceptions import PyiCloudAPIResponseException
+from config import (
+    APPLE_ID,
+    COOKIE_DIR,
+    DOWNLOAD_DIR,
+    OUT_EXCEL,
+    LOG_FILE
+)
 
+# ==============================
+# LOG SETUP
+# ==============================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+logging.info(f"pyicloud version: {pyicloud.__version__}")
 
 def safe(obj, name):
     return getattr(obj, name, None)
 
+def main():
+    start_ts = time.time()
 
-try:
-    print("Connecting to iCloud...")
-
-    api = PyiCloudService(
+    api = pyicloud.PyiCloudService(
         APPLE_ID,
         cookie_directory=str(COOKIE_DIR)
     )
 
-    print("Connected. Fetching photos metadata...")
+    photos = list(api.photos.all)
+    total = len(photos)
+    logging.info(f"Total assets: {total}")
 
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
     rows = []
 
-    for photo in api.photos.all:
-        versions = safe(photo, "versions") or {}
+    for photo in tqdm(photos, desc="Downloading", unit="file"):
+        try:
+            filename = safe(photo, "filename") or f"{safe(photo,'id')}.bin"
+            target = DOWNLOAD_DIR / filename
 
-        rows.append({
-            "id": safe(photo, "id"),
-            "filename": safe(photo, "filename"),
-            "item_type": safe(photo, "item_type"),
-            "is_live_photo": safe(photo, "is_live_photo"),
-            "size_bytes": safe(photo, "size"),
-            "width": (safe(photo, "dimensions") or (None, None))[0],
-            "height": (safe(photo, "dimensions") or (None, None))[1],
-            "created": safe(photo, "created"),
-            "asset_date": safe(photo, "asset_date"),
-            "added_date": safe(photo, "added_date"),
-            "original_url": versions.get("original", {}).get("url"),
-            "medium_url": versions.get("medium", {}).get("url"),
-            "thumb_url": versions.get("thumb", {}).get("url"),
-        })
+            if not target.exists():
+                data = photo.download()
+                with open(target, "wb") as f:
+                    f.write(data)
 
-    if not rows:
-        print("No photos found.")
-        sys.exit(0)
+            versions = safe(photo, "versions") or {}
+
+            rows.append({
+                "id": safe(photo, "id"),
+                "filename": filename,
+                "item_type": safe(photo, "item_type"),
+                "is_live_photo": safe(photo, "is_live_photo"),
+                "size_bytes": safe(photo, "size"),
+                "width": (safe(photo, "dimensions") or (None, None))[0],
+                "height": (safe(photo, "dimensions") or (None, None))[1],
+                "created": safe(photo, "created"),
+                "asset_date": safe(photo, "asset_date"),
+                "added_date": safe(photo, "added_date"),
+                "original_url": versions.get("original", {}).get("url"),
+            })
+
+        except PyiCloudAPIResponseException as e:
+            logging.error(f"API error asset {safe(photo,'id')}: {e}")
+        except Exception as e:
+            logging.error(f"Unexpected error asset {safe(photo,'id')}: {e}")
 
     df = pd.DataFrame(rows)
-    df.to_excel(OUT_FILE, index=False)
+    df.to_excel(OUT_EXCEL, index=False)
 
-    print(f"Saved: {OUT_FILE}")
+    elapsed = time.time() - start_ts
+    logging.info(f"Finished. Time spent: {elapsed:.1f} sec")
+    logging.info(f"Excel saved: {OUT_EXCEL}")
 
-except PyiCloudFailedLoginException as e:
-    print("\n[ERROR] iCloud login failed.")
-    print("Reason: Apple temporarily rejected the login.")
-    print("What to do:")
-    print("- wait 10–30 minutes")
-    print("- run auth script again (with password / 2FA)")
-    print("- do NOT retry multiple times in a row")
-    print(f"Details: {e}")
-
-except PyiCloudAPIResponseException as e:
-    print("\n[ERROR] iCloud API error.")
-    print("Apple service returned an error (often temporary).")
-    print("What to do:")
-    print("- wait and retry later")
-    print("- check iCloud.com login in browser")
-    print(f"Details: {e}")
-
-except Exception as e:
-    print("\n[ERROR] Unexpected error.")
-    print("The script stopped due to an unexpected exception.")
-    print(f"Details: {type(e).__name__}: {e}")
+if __name__ == "__main__":
+    main()
