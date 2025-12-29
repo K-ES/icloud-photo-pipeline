@@ -1,3 +1,22 @@
+2025.12.29 11:33:52 
+# 1. Основы: Образ ≠ Контейнер. -v маппит папки.
+# 2. Airflow образ: apache/airflow (~800 МБ) - всё готово.
+# 3. Запуск: docker run -p 8080:8080 apache/airflow
+# 4. DAGs локально: -v ./dags:/opt/airflow/dags
+# 5. Веб: localhost:8080, логин: admin/admin
+# 6. Редактируешь DAGs в IDE → Airflow видит сразу.
+# 7. Контейнер изолирован от WSL/системы.
+# 8. Разработка: маппинг папок. Продакшен: свой образ.
+---------------------------------------------------------------------------
+# 1. Basics: Image ≠ Container. -v maps folders.
+# 2. Airflow image: apache/airflow (~800 MB) - everything included.
+# 3. Run: docker run -p 8080:8080 apache/airflow
+# 4. Local DAGs: -v ./dags:/opt/airflow/dags
+# 5. Web UI: localhost:8080, login: admin/admin
+# 6. Edit DAGs in IDE → Airflow sees changes immediately.
+# 7. Container isolated from WSL/system.
+# 8. Dev: volume mapping. Prod: custom image.
+
 2025.12.28 09:42:51 
 🇷🇺 Что я уже изучил и понял про Docker
 Docker — это клиент–серверная система (CLI ≠ Engine)
@@ -20,8 +39,8 @@ Docker экономит место за счёт слоёв образов
 docker version может сам поднять WSL и сервер
 Docker Desktop — это умный автозапуск Linux-сервера
 Итог:
-
 Я понял Docker как архитектуру Linux-изоляции, а не как набор команд.
+---------------------------------------------------------------------------
 🇬🇧 What I have learned and understood about Docker
 Docker is a client–server system (CLI ≠ Engine)
 Docker Engine runs inside Linux (via WSL), not Windows
@@ -44,5 +63,7 @@ docker version can automatically start WSL and the engine
 Docker Desktop acts as an automatic Linux server launcher
 Summary:
 I understand Docker as a Linux isolation architecture, not just a set of commands.
-2025-12-28 06:57:00 - Курс https://www.youtube.com/watch?v=_uZQtRyF6Eg
-                      Course https://www.youtube.com/watch?v=_uZQtRyF6Eg
+2025-12-28 06:57:00
+Курс https://www.youtube.com/watch?v=_uZQtRyF6Eg
+---------------------------------------------------------------------------
+Course https://www.youtube.com/watch?v=_uZQtRyF6Eg
