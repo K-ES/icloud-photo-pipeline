@@ -86,7 +86,8 @@
 6. Редактируешь DAGs в IDE → Airflow видит сразу.
 7. Контейнер изолирован от WSL/системы.
 8. Разработка: маппинг папок. Продакшен: свой образ.
--------------------------------------------------------------------------
+
+
 1. Basics: Image ≠ Container. -v maps folders.
 2. Airflow image: apache/airflow (~800 MB) - everything included.
 3. Run: docker run -p 8080:8080 apache/airflow
@@ -120,7 +121,8 @@ docker version может сам поднять WSL и сервер
 Docker Desktop — это умный автозапуск Linux-сервера
 Итог:
 Я понял Docker как архитектуру Linux-изоляции, а не как набор команд.
----------------------------------------------------------------------------
+
+
 🇬🇧 What I have learned and understood about Docker
 Docker is a client–server system (CLI ≠ Engine)
 Docker Engine runs inside Linux (via WSL), not Windows
@@ -145,6 +147,7 @@ Summary:
 I understand Docker as a Linux isolation architecture, not just a set of commands.
 
 # 2025-12-28 06:57:00
+
 Курс https://www.youtube.com/watch?v=_uZQtRyF6Eg
----------------------------------------------------------------------------
+
 Course https://www.youtube.com/watch?v=_uZQtRyF6Eg
