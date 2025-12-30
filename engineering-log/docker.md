@@ -1,3 +1,22 @@
+## 2025.12.30 10:29:04
+
+Первый Docker-образ
+
+RU:
+Я установил Docker Desktop без установленного Python на Windows.
+Создал Dockerfile и собрал свой первый Docker-образ на базе python-образа.
+Понял, что Python и зависимости живут внутри образа.
+Контейнер запускается в WSL2 и выполняет процесс, указанный в CMD.
+Хостовая система не участвует в выполнении кода.
+
+EN:
+I installed Docker Desktop on Windows without local Python.
+I created a Dockerfile and built my first Docker image based on a Python image.
+I understood that Python and dependencies live inside the image.
+The container runs inside WSL2 and executes the process defined in CMD.
+The host system is not involved in code execution.
+
+
 ## 2025.12.30 05:38:04
 
 ### 🇷🇺 Русский
