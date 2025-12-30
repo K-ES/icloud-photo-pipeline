@@ -1,3 +1,16 @@
+## 2025.12.30 11:03:04
+
+**RU:**  
+Изучил Docker Compose: понял, как описывать несколько сервисов в 
+одном `docker-compose.yml`, запускать их одной командой и связывать 
+контейнеры между собой по именам сервисов.
+
+**EN:**  
+Studied Docker Compose: learned how to define multiple services in 
+a single `docker-compose.yml`, run them with one command, and connect 
+containers via service names.
+
+
 ## 2025.12.30 10:29:04
 
 Первый Docker-образ
