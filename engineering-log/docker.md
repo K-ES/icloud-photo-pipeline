@@ -1,3 +1,81 @@
+2025.12.30 04:47:04 
+## Docker + WSL storage: итоги эксперимента
+
+### 🇷🇺 Русский
+
+**Ключевая модель**
+- Docker Desktop на Windows (WSL2) хранит **ВСЁ состояние** в одном файле:
+  `docker_data.vhdx`
+- Внутри него:
+  - images
+  - containers
+  - volumes
+  - build cache
+
+**Что мы подтвердили на практике**
+- Удаление image (`docker rmi`) освобождает место **логически**
+- Размер `docker_data.vhdx` **не уменьшается автоматически**
+- Физический размер файла:
+  - растёт, когда Dockerу нужно больше места
+  - **не уменьшается сам**
+- `docker system df` — истина про Docker
+- размер `docker_data.vhdx` — физика Windows
+
+**Про shrink**
+- `Optimize-VHD` — недоступен (нет Hyper-V)
+- `wsl --compact` — недоступен в текущем билде
+- `--set-sparse`:
+  - не уменьшает файл
+  - влияет только на будущее поведение
+  - сейчас помечен как unsafe
+- **Единственный гарантированный способ уменьшить файл**:
+  удалить `docker_data.vhdx` при остановленном Docker/WSL  
+  → Docker создаёт новый, меньшего размера
+
+**Практический вывод**
+- Docker-образы и контейнеры = **кеш**
+- Источник истины = **код + Dockerfile + compose**
+- Docker можно безопасно «обнулять»
+
+---
+
+### 🇬🇧 English
+
+**Core model**
+- Docker Desktop on Windows (WSL2) stores **all state** in a single file:
+  `docker_data.vhdx`
+- Inside this file:
+  - images
+  - containers
+  - volumes
+  - build cache
+
+**What was proven**
+- Removing images frees space **logically**, not physically
+- `docker_data.vhdx` **does not shrink automatically**
+- The file:
+  - grows when more space is needed
+  - never shrinks by itself
+- `docker system df` shows Docker truth
+- VHDX size shows Windows disk reality
+
+**About shrinking**
+- `Optimize-VHD` unavailable (no Hyper-V)
+- `wsl --compact` unavailable in current build
+- `--set-sparse`:
+  - does not shrink existing file
+  - only affects future behavior
+  - currently marked unsafe
+- **Only guaranteed way to shrink**:
+  delete `docker_data.vhdx` with Docker/WSL stopped  
+  → Docker recreates a smaller file
+
+**Practical takeaway**
+- Docker images & containers = **cache**
+- Source of truth = **code + Dockerfile + compose**
+- Resetting Docker storage is safe and expected
+
+
 2025.12.29 11:33:52 
 # 1. Основы: Образ ≠ Контейнер. -v маппит папки.
 # 2. Airflow образ: apache/airflow (~800 МБ) - всё готово.
