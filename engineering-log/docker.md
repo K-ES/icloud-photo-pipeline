@@ -1,3 +1,28 @@
+## 2025.12.30 05:38:04
+
+### 🇷🇺 Русский
+- Установлен Docker Desktop
+- Скачан образ `apache/airflow:2.8.4`
+- Понято различие: image / container / volume
+- Контейнер запущен одной командой (`airflow standalone`)
+- Настроен проброс портов (`HOST:8081 → CONTAINER:8080`)
+- Airflow Web UI успешно открыт в браузере
+- Логин выполнен через данные из логов контейнера
+- Зафиксирована модель: контейнер = процесс, образ = шаблон
+- Понято, что Docker убирает ручную установку Python и зависимостей
+
+### 🇬🇧 English
+- Docker Desktop installed
+- Image `apache/airflow:2.8.4` pulled
+- Image / container / volume model understood
+- Container started with a single command (`airflow standalone`)
+- Port mapping configured (`HOST:8081 → CONTAINER:8080`)
+- Airflow Web UI successfully opened
+- Login credentials obtained from container logs
+- Core model fixed: container = process, image = template
+- Docker removes manual Python and dependency setup
+
+
 ## 2025.12.30 04:47:04 
 ## Docker + WSL storage: итоги эксперимента
 
