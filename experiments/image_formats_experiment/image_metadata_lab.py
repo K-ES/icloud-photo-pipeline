@@ -1,146 +1,175 @@
+# experiments/image_formats_experiment/image_with_location.py
+
 from pathlib import Path
 from datetime import datetime
+import re
+import requests
+import xml.etree.ElementTree as ET
+
 from PIL import Image, ImageDraw, ImageFont
 import pillow_heif
-import requests
 
-# ---------- config ----------
+# ================== CONFIG ==================
 
-INPUT_DIR = Path(r"p:\!PhotoData\02_Extract\heic\Фото iCloud")
+INPUT_DIR = Path(r"p:\!PhotoData\03_TestFormats")
 OUTPUT_DIR = Path(r"p:\!PhotoData\04_WithLocation")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 FONT_PATH = Path(__file__).parent / "fonts" / "DejaVuSans.ttf"
+FONT_SIZE_MAIN = 48     # локация
+FONT_SIZE_DATE = 36     # дата
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
-USER_AGENT = "photo-location-caption"
+MAX_FILES = 10
 
 pillow_heif.register_heif_opener()
 
-# ---------- helpers ----------
+# ================== HELPERS ==================
 
-def dms_to_deg(dms):
-    d, m, s = dms
-    return float(d) + float(m) / 60 + float(s) / 3600
+def safe_slug(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"\s+", "_", text)
+    return text[:40]
 
+# ---------- DATE ----------
+
+def extract_datetime(img, exif) -> datetime | None:
+    # 1. EXIF (JPEG)
+    for tag in (36867, 306):  # DateTimeOriginal, DateTime
+        val = exif.get(tag)
+        if val:
+            try:
+                return datetime.strptime(val, "%Y:%m:%d %H:%M:%S")
+            except Exception:
+                pass
+
+    # 2. XMP (HEIC / iPhone)
+    xmp = img.info.get("xmp")
+    if xmp:
+        try:
+            root = ET.fromstring(xmp)
+            for el in root.iter():
+                if el.tag.endswith("CreateDate"):
+                    return datetime.fromisoformat(el.text.replace("Z", ""))
+        except Exception:
+            pass
+
+    return None
+
+# ---------- GPS ----------
 
 def extract_gps(exif):
     gps = exif.get_ifd(0x8825)
     if not gps:
         return None
 
-    lat = dms_to_deg(gps[2])
+    def conv(v):
+        return float(v[0]) + float(v[1]) / 60 + float(v[2]) / 3600
+
+    lat = conv(gps.get(2))
     if gps.get(1) == "S":
         lat = -lat
 
-    lon = dms_to_deg(gps[4])
+    lon = conv(gps.get(4))
     if gps.get(3) == "W":
         lon = -lon
 
     return lat, lon
 
+# ---------- LOCATION ----------
 
-def reverse_geocode(lat, lon):
-    params = {"format": "jsonv2", "lat": lat, "lon": lon}
-    headers = {"User-Agent": USER_AGENT}
-
-    r = requests.get(NOMINATIM_URL, params=params, headers=headers, timeout=10)
-    r.raise_for_status()
+def reverse_geocode(gps):
+    lat, lon = gps
+    r = requests.get(
+        "https://nominatim.openstreetmap.org/reverse",
+        params={
+            "lat": lat,
+            "lon": lon,
+            "format": "jsonv2",
+            "accept-language": "ru"
+        },
+        headers={"User-Agent": "photo-location"},
+        timeout=10
+    )
     data = r.json()
 
     name = data.get("name")
-    address = data.get("address", {})
-    city = (
-        address.get("city")
-        or address.get("town")
-        or address.get("village")
-        or address.get("county")
-    )
-    country = address.get("country")
+    city = data.get("address", {}).get("city") or data.get("address", {}).get("town")
 
     if name and city:
         return f"{name} · {city}"
-    if city and country:
-        return f"{city} · {country}"
-    return data.get("display_name")
+    return name or city or "unknown_place"
 
+# ================== IMAGE ==================
 
-def get_photo_datetime(img):
-    exif = img.getexif()
-    dt = exif.get(36867) or exif.get(306)
-    if not dt:
-        return None
-    return datetime.strptime(dt, "%Y:%m:%d %H:%M:%S")
-
-
-def add_caption(img, place, photo_dt):
+def add_caption(img, line1, line2):
     w, h = img.size
-    caption_h = int(h * 0.12)
+    bar_h = int(h * 0.16)
 
-    base = Image.new("RGBA", (w, h + caption_h), (0, 0, 0, 255))
-    base.paste(img.convert("RGBA"), (0, 0))
-    draw = ImageDraw.Draw(base)
+    base = Image.new("RGB", (w, h + bar_h), (0, 0, 0))
+    base.paste(img, (0, 0))
 
-    main_font = ImageFont.truetype(str(FONT_PATH), int(caption_h * 0.30))
-    date_font = ImageFont.truetype(str(FONT_PATH), int(caption_h * 0.20))
-
-    overlay = Image.new("RGBA", (w, caption_h), (0, 0, 0, 160))
+    overlay = Image.new("RGBA", (w, bar_h), (0, 0, 0, 160))
     base.paste(overlay, (0, h), overlay)
 
-    # place
-    tb = draw.textbbox((0, 0), place, font=main_font)
-    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+    draw = ImageDraw.Draw(base)
+    font_main = ImageFont.truetype(str(FONT_PATH), FONT_SIZE_MAIN)
+    font_date = ImageFont.truetype(str(FONT_PATH), FONT_SIZE_DATE)
 
-    text_x = (w - tw) // 2
-    text_y = h + int(caption_h * 0.18)
+    # --- первая строка (локация)
+    bbox1 = draw.textbbox((0, 0), line1, font=font_main)
+    w1 = bbox1[2] - bbox1[0]
+    h1 = bbox1[3] - bbox1[1]
 
-    draw.text((text_x, text_y), place, (255, 255, 255, 255), font=main_font)
+    # --- вторая строка (дата)
+    bbox2 = draw.textbbox((0, 0), line2, font=font_date)
+    w2 = bbox2[2] - bbox2[0]
+    h2 = bbox2[3] - bbox2[1]
 
-    # datetime
-    if photo_dt:
-        dt_text = photo_dt.strftime("%Y-%m-%d %H:%M")
+    y_start = h + (bar_h - h1 - h2 - 10) // 2
 
-        db = draw.textbbox((0, 0), dt_text, font=date_font)
-        dt_w, dt_h = db[2] - db[0], db[3] - db[1]
+    draw.text(
+        ((w - w1) // 2, y_start),
+        line1,
+        fill=(255, 255, 255),
+        font=font_main
+    )
 
-        dt_x = (w - dt_w) // 2
-        dt_y = text_y + th + 4
+    draw.text(
+        ((w - w2) // 2, y_start + h1 + 10),
+        line2,
+        fill=(220, 220, 220),
+        font=font_date
+    )
 
-        draw.text((dt_x, dt_y), dt_text, (200, 200, 200, 220), font=date_font)
+    return base
 
-    return base.convert("RGB")
-
-
-# ---------- main ----------
-
-def process_file(path: Path):
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            if not exif:
-                return
-
-            gps = extract_gps(exif)
-            if not gps:
-                return
-
-            lat, lon = gps
-            place = reverse_geocode(lat, lon)
-            photo_dt = get_photo_datetime(img)
-
-            out_img = add_caption(img, place, photo_dt)
-            out_path = OUTPUT_DIR / f"{path.stem}_location.jpg"
-            out_img.save(out_path, quality=95)
-
-    except Exception as e:
-        print(f"ERROR {path}: {e}")
-
+# ================== MAIN ==================
 
 def main():
-    for f in INPUT_DIR.rglob("*"):
-        if f.suffix.lower() in {".heic", ".jpg", ".jpeg"}:
-            process_file(f)
+    OUTPUT_DIR.mkdir(exist_ok=True)
 
+    files = [
+        f for f in INPUT_DIR.iterdir()
+        if f.suffix.lower() in {".heic", ".jpg", ".jpeg"}
+    ][:MAX_FILES]
+
+    for idx, f in enumerate(files, start=1):
+        with Image.open(f) as img:
+            exif = img.getexif()
+
+            dt = extract_datetime(img, exif)
+            dt_part = dt.strftime("%Y_%m_%d_%H_%M_%S") if dt else "unknown_date"
+            dt_text = dt.strftime("%d.%m.%Y %H:%M:%S") if dt else "unknown date"
+
+            gps = extract_gps(exif)
+            place = reverse_geocode(gps) if gps else "unknown_place"
+
+            out_img = add_caption(img, place, dt_text)
+
+            name = f"{dt_part}__{safe_slug(place)}__{idx}.jpg"
+            out_img.save(OUTPUT_DIR / name, quality=95)
+
+            print("saved:", name)
 
 if __name__ == "__main__":
     main()
