@@ -4,14 +4,16 @@ from pathlib import Path
 import zipfile
 import logging
 
+# ===== constants =====
+INBOX_DIR = Path(r"p:\!PhotoData\01_Archives")
+TARGET_ROOT = Path(r"p:\!PhotoData\02_Extract")
+
+# ===== logging =====
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def extract_all_zips(inbox_dir: str | Path, target_root: str | Path) -> None:
-    inbox_dir = Path(inbox_dir)
-    target_root = Path(target_root)
-
+def extract_all_zips(inbox_dir: Path, target_root: Path) -> None:
     if not inbox_dir.exists():
         raise FileNotFoundError(f"Inbox not found: {inbox_dir}")
 
@@ -47,6 +49,6 @@ def extract_all_zips(inbox_dir: str | Path, target_root: str | Path) -> None:
 
 if __name__ == "__main__":
     extract_all_zips(
-        inbox_dir=r"p:\airflow_media_inbox",
-        target_root=r"p:\airflow_media_extracted"
+        inbox_dir=INBOX_DIR,
+        target_root=TARGET_ROOT,
     )
