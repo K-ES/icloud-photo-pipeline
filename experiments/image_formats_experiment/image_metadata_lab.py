@@ -1,27 +1,39 @@
 from pathlib import Path
 from datetime import datetime
-from PIL import Image, ExifTags
+from PIL import Image, ExifTags, ImageDraw, ImageFont
 import pillow_heif
 import requests
 import re
+import shutil
 
 # ================= CONFIG =================
 
 INPUT_ROOT = Path(r"p:\!PhotoData\02_Extract")
 OUTPUT_ROOT = Path(r"p:\!PhotoData\04_WithLocation")
 
-CAMERA_DIR = OUTPUT_ROOT / "camera"
-UNKNOWN_DIR = OUTPUT_ROOT / "unknown"
+RUN_DATE = datetime.now().strftime("%Y_%m_%d")
 
-CAMERA_DIR.mkdir(parents=True, exist_ok=True)
-UNKNOWN_DIR.mkdir(parents=True, exist_ok=True)
+CAMERA_DIR = OUTPUT_ROOT / f"camera_{RUN_DATE}"
+UNKNOWN_DIR = OUTPUT_ROOT / f"unknown_{RUN_DATE}"
 
 FORMATS = {".jpg", ".jpeg", ".heic", ".png"}
 MAX_W, MAX_H = 1920, 1080
 SERIES_SECONDS = 5
 
+FONT_PATH = Path(__file__).parent / "fonts" / "DejaVuSans.ttf"
+
 pillow_heif.register_heif_opener()
 TAGS = ExifTags.TAGS
+
+# ================= PREPARE OUTPUT =================
+
+if OUTPUT_ROOT.exists():
+    for p in OUTPUT_ROOT.iterdir():
+        if p.is_dir():
+            shutil.rmtree(p)
+
+CAMERA_DIR.mkdir(parents=True, exist_ok=True)
+UNKNOWN_DIR.mkdir(parents=True, exist_ok=True)
 
 # ================= HELPERS =================
 
@@ -74,14 +86,12 @@ def extract_gps(exif):
 def reverse_geocode(gps):
     if not gps:
         return "unknown_place"
-
-    lat, lon = gps
     try:
         r = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
             params={
-                "lat": lat,
-                "lon": lon,
+                "lat": gps[0],
+                "lon": gps[1],
                 "format": "jsonv2",
                 "accept-language": "ru"
             },
@@ -95,55 +105,62 @@ def reverse_geocode(gps):
     name = data.get("name")
     addr = data.get("address", {})
     city = addr.get("city") or addr.get("town") or addr.get("village")
-
     if name and city:
         return f"{name}_{city}"
     return name or city or "unknown_place"
-
-def has_gps(exif):
-    return any(TAGS.get(k) == "GPSInfo" for k in exif)
-
-def is_screenshot(w, h):
-    r = max(w, h) / min(w, h)
-    return 2.1 <= r <= 2.8
-
-def is_messenger(exif):
-    for k, v in exif.items():
-        if TAGS.get(k) == "Software":
-            s = str(v).lower()
-            return "telegram" in s or "whatsapp" in s
-    return False
-
-def is_camera(exif, w, h):
-    make = str(exif.get(271, "")).lower()
-    model = str(exif.get(272, "")).lower()
-    r = max(w, h) / min(w, h)
-    return "apple" in make and "iphone" in model and 1.2 <= r <= 1.4
 
 def resize_fhd(img):
     img.thumbnail((MAX_W, MAX_H), Image.LANCZOS)
     return img
 
 def size_tag(w, h):
-    return f"{w:04d}x{h:04d}"
+    return f"{w}x{h}"
+
+def is_camera_file(path: Path) -> bool:
+    if path.suffix.lower() == ".png":
+        return False
+    return re.match(r"img_\d+", path.stem.lower()) is not None
+
+def draw_caption(img, dt: datetime, location: str):
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype(str(FONT_PATH), 32)
+
+    line1 = dt.strftime("%Y-%m-%d %H:%M:%S")
+    line2 = location.replace("_", " ")
+
+    pad = 16
+    lh = font.size + 6
+
+    w1 = draw.textlength(line1, font)
+    w2 = draw.textlength(line2, font)
+    box_w = int(max(w1, w2)) + pad * 2
+    box_h = lh * 2 + pad * 2
+
+    x = pad
+    y = img.height - box_h - pad
+
+    draw.rectangle(
+        [x, y, x + box_w, y + box_h],
+        fill=(0, 0, 0)
+    )
+
+    draw.text((x + pad, y + pad), line1, fill="white", font=font)
+    draw.text((x + pad, y + pad + lh), line2, fill="white", font=font)
+
+    return img
 
 # ================= PREPASS: SERIES =================
 
-files = [
-    f for f in INPUT_ROOT.rglob("*")
-    if f.suffix.lower() in FORMATS
-]
+files = [f for f in INPUT_ROOT.rglob("*") if f.suffix.lower() in FORMATS]
 
 records = []
-
 for f in files:
     try:
         with Image.open(f) as img:
-            exif = get_exif(img)
-            dt = normalize_datetime(extract_datetime(exif))
+            dt = normalize_datetime(extract_datetime(get_exif(img)))
             records.append((f, dt))
     except Exception:
-        continue
+        pass
 
 records.sort(key=lambda x: x[1])
 
@@ -175,44 +192,45 @@ global_index = 1
 for f, dt in records:
     try:
         with Image.open(f) as img:
-            exif = get_exif(img)
             w, h = img.size
 
             dt_str = dt.strftime("%Y_%m_%d_%H_%M_%S")
-            gps = extract_gps(exif)
+            orig_name = safe_slug(f.stem)
+
+            gps = extract_gps(get_exif(img))
             location = safe_slug(reverse_geocode(gps))
 
             num_part = f"{global_index:03d}"
-            series_part = "XXXXXXXXXXXXXXXXXXX" if series_flags.get(f, False) else None
+            series_part = "XXXXXXXXXXXXXXXXXXX" if series_flags.get(f) else None
 
-            if is_camera(exif, w, h):
+            # ===== CAMERA =====
+            if is_camera_file(f):
                 out_dir = CAMERA_DIR
-                parts = [dt_str, location, num_part]
+                parts = [location, num_part]
                 if series_part:
                     parts.append(series_part)
-                name = "__".join(parts) + ".jpg"
+
+                img = resize_fhd(img)
+                img = img.convert("RGB")
+                img = draw_caption(img, dt, location)
+
+                name = "__".join([dt_str, orig_name, *parts]) + ".jpg"
+                img.save(out_dir / name, "JPEG", quality=92)
+
+            # ===== UNKNOWN =====
             else:
                 out_dir = UNKNOWN_DIR
-                reason = (
-                    "vozmozhno_screenshot"
-                    if is_screenshot(w, h)
-                    else "vozmozhno_iz_chatov"
-                )
-                parts = [
-                    dt_str,
-                    location,
-                    size_tag(w, h),
-                    num_part
-                ]
+                parts = [location, size_tag(w, h), num_part]
                 if series_part:
                     parts.append(series_part)
-                parts.append(reason)
-                name = "__".join(parts) + ".jpg"
 
-            img = resize_fhd(img)
-            img.convert("RGB").save(out_dir / name, "JPEG", quality=92)
+                img = img.convert("RGB")
+                img = draw_caption(img, dt, location)
 
-            print("saved:", name)
+                name = "__".join([dt_str, orig_name, *parts]) + f.suffix.lower()
+                img.save(out_dir / name)
+
+            print(f"saved ({out_dir}): {name}")
             global_index += 1
 
     except Exception as e:
