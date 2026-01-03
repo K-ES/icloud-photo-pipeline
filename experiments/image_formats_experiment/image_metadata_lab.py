@@ -1,28 +1,29 @@
-# experiments/image_formats_experiment/image_with_location.py
-
 from pathlib import Path
 from datetime import datetime
-import re
-import requests
-import xml.etree.ElementTree as ET
-
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ExifTags
 import pillow_heif
+import requests
+import re
 
-# ================== CONFIG ==================
+# ================= CONFIG =================
 
-INPUT_DIR = Path(r"p:\!PhotoData\03_TestFormats")
-OUTPUT_DIR = Path(r"p:\!PhotoData\04_WithLocation")
+INPUT_ROOT = Path(r"p:\!PhotoData\02_Extract")
+OUTPUT_ROOT = Path(r"p:\!PhotoData\04_WithLocation")
 
-FONT_PATH = Path(__file__).parent / "fonts" / "DejaVuSans.ttf"
-FONT_SIZE_MAIN = 48     # локация
-FONT_SIZE_DATE = 36     # дата
+CAMERA_DIR = OUTPUT_ROOT / "camera"
+UNKNOWN_DIR = OUTPUT_ROOT / "unknown"
 
-MAX_FILES = 10
+CAMERA_DIR.mkdir(parents=True, exist_ok=True)
+UNKNOWN_DIR.mkdir(parents=True, exist_ok=True)
+
+FORMATS = {".jpg", ".jpeg", ".heic", ".png"}
+MAX_W, MAX_H = 1920, 1080
+SERIES_SECONDS = 5
 
 pillow_heif.register_heif_opener()
+TAGS = ExifTags.TAGS
 
-# ================== HELPERS ==================
+# ================= HELPERS =================
 
 def safe_slug(text: str) -> str:
     text = text.lower()
@@ -30,32 +31,27 @@ def safe_slug(text: str) -> str:
     text = re.sub(r"\s+", "_", text)
     return text[:40]
 
-# ---------- DATE ----------
+def get_exif(img):
+    try:
+        return img.getexif() or {}
+    except Exception:
+        return {}
 
-def extract_datetime(img, exif) -> datetime | None:
-    # 1. EXIF (JPEG)
-    for tag in (36867, 306):  # DateTimeOriginal, DateTime
-        val = exif.get(tag)
-        if val:
-            try:
-                return datetime.strptime(val, "%Y:%m:%d %H:%M:%S")
-            except Exception:
-                pass
-
-    # 2. XMP (HEIC / iPhone)
-    xmp = img.info.get("xmp")
-    if xmp:
-        try:
-            root = ET.fromstring(xmp)
-            for el in root.iter():
-                if el.tag.endswith("CreateDate"):
-                    return datetime.fromisoformat(el.text.replace("Z", ""))
-        except Exception:
-            pass
-
+def extract_datetime(exif):
+    for tag_name in ("DateTimeOriginal", "DateTimeDigitized", "DateTime"):
+        for k, v in exif.items():
+            if TAGS.get(k) == tag_name:
+                try:
+                    return datetime.strptime(v, "%Y:%m:%d %H:%M:%S")
+                except Exception:
+                    pass
     return None
 
-# ---------- GPS ----------
+def normalize_datetime(dt):
+    if not dt:
+        now = datetime.now()
+        return datetime(now.year, now.month, now.day, 0, 0, 0)
+    return dt
 
 def extract_gps(exif):
     gps = exif.get_ifd(0x8825)
@@ -75,101 +71,149 @@ def extract_gps(exif):
 
     return lat, lon
 
-# ---------- LOCATION ----------
-
 def reverse_geocode(gps):
+    if not gps:
+        return "unknown_place"
+
     lat, lon = gps
-    r = requests.get(
-        "https://nominatim.openstreetmap.org/reverse",
-        params={
-            "lat": lat,
-            "lon": lon,
-            "format": "jsonv2",
-            "accept-language": "ru"
-        },
-        headers={"User-Agent": "photo-location"},
-        timeout=10
-    )
-    data = r.json()
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={
+                "lat": lat,
+                "lon": lon,
+                "format": "jsonv2",
+                "accept-language": "ru"
+            },
+            headers={"User-Agent": "photo-sorter"},
+            timeout=10
+        )
+        data = r.json()
+    except Exception:
+        return "unknown_place"
 
     name = data.get("name")
-    city = data.get("address", {}).get("city") or data.get("address", {}).get("town")
+    addr = data.get("address", {})
+    city = addr.get("city") or addr.get("town") or addr.get("village")
 
     if name and city:
-        return f"{name} · {city}"
+        return f"{name}_{city}"
     return name or city or "unknown_place"
 
-# ================== IMAGE ==================
+def has_gps(exif):
+    return any(TAGS.get(k) == "GPSInfo" for k in exif)
 
-def add_caption(img, line1, line2):
-    w, h = img.size
-    bar_h = int(h * 0.16)
+def is_screenshot(w, h):
+    r = max(w, h) / min(w, h)
+    return 2.1 <= r <= 2.8
 
-    base = Image.new("RGB", (w, h + bar_h), (0, 0, 0))
-    base.paste(img, (0, 0))
+def is_messenger(exif):
+    for k, v in exif.items():
+        if TAGS.get(k) == "Software":
+            s = str(v).lower()
+            return "telegram" in s or "whatsapp" in s
+    return False
 
-    overlay = Image.new("RGBA", (w, bar_h), (0, 0, 0, 160))
-    base.paste(overlay, (0, h), overlay)
+def is_camera(exif, w, h):
+    make = str(exif.get(271, "")).lower()
+    model = str(exif.get(272, "")).lower()
+    r = max(w, h) / min(w, h)
+    return "apple" in make and "iphone" in model and 1.2 <= r <= 1.4
 
-    draw = ImageDraw.Draw(base)
-    font_main = ImageFont.truetype(str(FONT_PATH), FONT_SIZE_MAIN)
-    font_date = ImageFont.truetype(str(FONT_PATH), FONT_SIZE_DATE)
+def resize_fhd(img):
+    img.thumbnail((MAX_W, MAX_H), Image.LANCZOS)
+    return img
 
-    # --- первая строка (локация)
-    bbox1 = draw.textbbox((0, 0), line1, font=font_main)
-    w1 = bbox1[2] - bbox1[0]
-    h1 = bbox1[3] - bbox1[1]
+def size_tag(w, h):
+    return f"{w:04d}x{h:04d}"
 
-    # --- вторая строка (дата)
-    bbox2 = draw.textbbox((0, 0), line2, font=font_date)
-    w2 = bbox2[2] - bbox2[0]
-    h2 = bbox2[3] - bbox2[1]
+# ================= PREPASS: SERIES =================
 
-    y_start = h + (bar_h - h1 - h2 - 10) // 2
+files = [
+    f for f in INPUT_ROOT.rglob("*")
+    if f.suffix.lower() in FORMATS
+]
 
-    draw.text(
-        ((w - w1) // 2, y_start),
-        line1,
-        fill=(255, 255, 255),
-        font=font_main
-    )
+records = []
 
-    draw.text(
-        ((w - w2) // 2, y_start + h1 + 10),
-        line2,
-        fill=(220, 220, 220),
-        font=font_date
-    )
-
-    return base
-
-# ================== MAIN ==================
-
-def main():
-    OUTPUT_DIR.mkdir(exist_ok=True)
-
-    files = [
-        f for f in INPUT_DIR.iterdir()
-        if f.suffix.lower() in {".heic", ".jpg", ".jpeg"}
-    ][:MAX_FILES]
-
-    for idx, f in enumerate(files, start=1):
+for f in files:
+    try:
         with Image.open(f) as img:
-            exif = img.getexif()
+            exif = get_exif(img)
+            dt = normalize_datetime(extract_datetime(exif))
+            records.append((f, dt))
+    except Exception:
+        continue
 
-            dt = extract_datetime(img, exif)
-            dt_part = dt.strftime("%Y_%m_%d_%H_%M_%S") if dt else "unknown_date"
-            dt_text = dt.strftime("%d.%m.%Y %H:%M:%S") if dt else "unknown date"
+records.sort(key=lambda x: x[1])
 
+series_flags = {}
+current = []
+
+for f, dt in records:
+    if not current:
+        current = [(f, dt)]
+        continue
+
+    _, prev_dt = current[-1]
+    if abs((dt - prev_dt).total_seconds()) <= SERIES_SECONDS:
+        current.append((f, dt))
+    else:
+        if len(current) > 1:
+            for x, _ in current:
+                series_flags[x] = True
+        current = [(f, dt)]
+
+if len(current) > 1:
+    for x, _ in current:
+        series_flags[x] = True
+
+# ================= MAIN =================
+
+global_index = 1
+
+for f, dt in records:
+    try:
+        with Image.open(f) as img:
+            exif = get_exif(img)
+            w, h = img.size
+
+            dt_str = dt.strftime("%Y_%m_%d_%H_%M_%S")
             gps = extract_gps(exif)
-            place = reverse_geocode(gps) if gps else "unknown_place"
+            location = safe_slug(reverse_geocode(gps))
 
-            out_img = add_caption(img, place, dt_text)
+            num_part = f"{global_index:03d}"
+            series_part = "XXXXXXXXXXXXXXXXXXX" if series_flags.get(f, False) else None
 
-            name = f"{dt_part}__{safe_slug(place)}__{idx}.jpg"
-            out_img.save(OUTPUT_DIR / name, quality=95)
+            if is_camera(exif, w, h):
+                out_dir = CAMERA_DIR
+                parts = [dt_str, location, num_part]
+                if series_part:
+                    parts.append(series_part)
+                name = "__".join(parts) + ".jpg"
+            else:
+                out_dir = UNKNOWN_DIR
+                reason = (
+                    "vozmozhno_screenshot"
+                    if is_screenshot(w, h)
+                    else "vozmozhno_iz_chatov"
+                )
+                parts = [
+                    dt_str,
+                    location,
+                    size_tag(w, h),
+                    num_part
+                ]
+                if series_part:
+                    parts.append(series_part)
+                parts.append(reason)
+                name = "__".join(parts) + ".jpg"
+
+            img = resize_fhd(img)
+            img.convert("RGB").save(out_dir / name, "JPEG", quality=92)
 
             print("saved:", name)
+            global_index += 1
 
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        print("skip:", f.name, e)
