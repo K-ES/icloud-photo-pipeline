@@ -1,3 +1,22 @@
+## 2025.12.30 12:18:00
+
+**RU:**  
+Создал минимальный Docker-образ на базе `python:3.12-slim`, который выводит
+«Здравствуй мир». Разобрался с путями сборки, контекстом Dockerfile и тем,
+что базовый образ может не отображаться отдельно. Залогинился в Docker Hub,
+протегировал образ с namespace, залил его в registry, удалил локально и
+подтвердил воспроизводимость: успешно скачал (`docker pull`) и запустил
+образ на чистой системе.
+
+**EN:**  
+Created a minimal Docker image based on `python:3.12-slim` that prints
+“Hello world”. Understood build context and Dockerfile paths, and that
+base images may not appear as standalone images. Logged into Docker Hub,
+tagged the image with a namespace, pushed it to the registry, removed it
+locally, and verified reproducibility by pulling and running the image
+from scratch.
+
+
 ## 2025.12.30 11:03:04
 
 **RU:**  
