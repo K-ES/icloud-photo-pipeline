@@ -1,29 +1,20 @@
+import time
 import os
 import sys
-from pathlib import Path
 
 REQUIRED_ENV_VARS = [
     "PHOTO_OPT_INPUT_DIR",
     "PHOTO_OPT_OUTPUT_DIR",
 ]
 
-def require_env(vars_):
-    missing = [v for v in vars_ if not os.getenv(v)]
-    if missing:
-        print("ERROR: required environment variables are missing:", file=sys.stderr)
-        for v in missing:
-            print(f" - {v}", file=sys.stderr)
-        sys.exit(1)
+missing = [v for v in REQUIRED_ENV_VARS if not os.getenv(v)]
 
-require_env(REQUIRED_ENV_VARS)
+if missing:
+    print("все плохо", file=sys.stderr)
+    for v in missing:
+        print(f"missing: {v}", file=sys.stderr)
+else:
+    print("все хорошо")
 
-INPUT_DIR = Path(os.environ["PHOTO_OPT_INPUT_DIR"])
-OUTPUT_DIR = Path(os.environ["PHOTO_OPT_OUTPUT_DIR"])
-
-if not INPUT_DIR.exists():
-    print(f"ERROR: input dir does not exist: {INPUT_DIR}", file=sys.stderr)
-    sys.exit(2)
-
-if not OUTPUT_DIR.exists():
-    print(f"ERROR: output dir does not exist: {OUTPUT_DIR}", file=sys.stderr)
-    sys.exit(3)
+# держим контейнер живым для осмотра
+time.sleep(3600)

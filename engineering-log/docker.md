@@ -1,3 +1,24 @@
+## 2026.01.05 02:10:00
+Docker: lifecycle контейнера, Files и debug-паттерны
+
+RU:
+Разобрался с жизненным циклом контейнера: контейнер живёт, пока живёт главный процесс.
+Понял разницу CMD vs ENTRYPOINT и почему ENTRYPOINT мешает дебагу.
+Осознал, что sys.exit() мгновенно завершает контейнер, а код ниже не выполняется.
+Для отладки использовал sleep в коде, чтобы контейнер оставался в состоянии Running.
+Зафиксировал, что Docker Desktop показывает Files только для running-контейнеров.
+Научился читать файловую систему stopped-контейнера через docker cp.
+Понял, что изменения кода требуют пересборки образа (docker build).
+
+EN:
+Understood the container lifecycle: a container lives as long as its main process runs.
+Clarified the difference between CMD and ENTRYPOINT and why ENTRYPOINT complicates debugging.
+Realized that sys.exit() immediately stops the container and prevents further code execution.
+Used sleep in code to keep the container running for debugging purposes.
+Confirmed that Docker Desktop shows Files only for running containers.
+Learned how to inspect a stopped container’s filesystem using docker cp.
+Fixed the rule: code changes require rebuilding the image (docker build).
+
 ## 2025.12.30 12:18:00
 
 **RU:**  
