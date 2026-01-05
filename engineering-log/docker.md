@@ -1,3 +1,27 @@
+## 2026.01.05 05:30:00
+Docker: batch-образ для локальной распаковки архивов
+
+RU:
+Реализовал batch-Docker-образ для локальной распаковки zip-архивов.
+Зафиксировал контракт образа: вход и выход передаются только через ENV и volumes.
+Понял, что volumes — это runtime-параметры контейнера, а не часть образа.
+Отладил связку ENV → файловая система контейнера → хостовые каталоги.
+Подтвердил, что код читает только окружение процесса, независимо от источника (Docker, shell, PyCharm).
+Добавил подробное логирование с таймстемпами для трассировки выполнения.
+Опубликовал образ в Docker Hub, удалил локальные образы и подтвердил воспроизводимость через pull.
+Зафиксировал паттерн: image = логика, docker run = конфигурация, volume = данные.
+
+EN:
+Implemented a batch Docker image for local zip archive extraction.
+Fixed the image contract: input and output are provided only via environment variables and volumes.
+Clarified that volumes are runtime container parameters, not part of the image.
+Debugged the ENV → container filesystem → host directories flow.
+Confirmed that the code reads only process environment variables regardless of their source (Docker, shell, PyCharm).
+Added verbose timestamped logging for execution tracing.
+Published the image to Docker Hub, removed local images, and verified reproducibility via pull.
+Fixed the pattern: image = logic, docker run = configuration, volume = data.
+
+
 ## 2026.01.05 04:10:00
 Docker: lifecycle контейнера, Files и debug-паттерны
 
