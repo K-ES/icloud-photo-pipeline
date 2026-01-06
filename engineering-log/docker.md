@@ -111,7 +111,7 @@ The host system is not involved in code execution.
 
 ## 2025.12.30 05:38:04
 
-### 🇷🇺 Русский
+Русский
 - Установлен Docker Desktop
 - Скачан образ `apache/airflow:2.8.4`
 - Понято различие: image / container / volume
@@ -122,7 +122,7 @@ The host system is not involved in code execution.
 - Зафиксирована модель: контейнер = процесс, образ = шаблон
 - Понято, что Docker убирает ручную установку Python и зависимостей
 
-### 🇬🇧 English
+English
 - Docker Desktop installed
 - Image `apache/airflow:2.8.4` pulled
 - Image / container / volume model understood
@@ -135,9 +135,9 @@ The host system is not involved in code execution.
 
 
 ## 2025.12.30 04:47:04 
-## Docker + WSL storage: итоги эксперимента
+Docker + WSL storage: итоги эксперимента
 
-### 🇷🇺 Русский
+🇷🇺 Русский
 
 **Ключевая модель**
 - Docker Desktop на Windows (WSL2) хранит **ВСЁ состояние** в одном файле:
@@ -175,7 +175,7 @@ The host system is not involved in code execution.
 
 ---
 
-### 🇬🇧 English
+🇬🇧 English
 
 **Core model**
 - Docker Desktop on Windows (WSL2) stores **all state** in a single file:
