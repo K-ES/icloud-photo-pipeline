@@ -1,3 +1,18 @@
+## 2026.01.06 06:19:00
+
+Docker: Postgres, порты и подключение из DBeaver
+
+RU:
+Остановил локальную службу PostgreSQL, освободил порт 5432.
+Поднял Postgres в Docker с пробросом порта и подключился из DBeaver по localhost.
+Проверил доступность порта через Test-NetConnection и docker port.
+
+EN:
+Stopped the local PostgreSQL service and freed port 5432.
+Started PostgreSQL in Docker with port publishing and connected from DBeaver via localhost.
+Verified connectivity with Test-NetConnection and docker port.
+
+
 ## 2026.01.05 05:30:00
 Docker: batch-образ для локальной распаковки архивов
 
